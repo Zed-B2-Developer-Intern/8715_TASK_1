@@ -1,16 +1,18 @@
 // pages/index.js
-import { useEffect, useState, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import io from "socket.io-client";
-import { Input, Button, Layout, List, Avatar } from "antd";
+import { Layout, Input, Button, List, Avatar } from "antd";
 import { SendOutlined } from "@ant-design/icons";
 
 const { Header, Sider, Content } = Layout;
-
 let socket;
 
 export default function Home() {
-  const [messages, setMessages] = useState([]);
+  const [joined, setJoined] = useState(false);
+  const [room, setRoom] = useState("");
+  const [username, setUsername] = useState("");
   const [input, setInput] = useState("");
+  const [messages, setMessages] = useState([]);
   const [typingStatus, setTypingStatus] = useState("");
   const messagesEndRef = useRef(null);
 
@@ -23,7 +25,7 @@ export default function Home() {
     });
 
     socket.on("typing", (status) => {
-      setTypingStatus(status ? "Michu is typing..." : "");
+      setTypingStatus(status ? "Someone is typing..." : "");
     });
 
     return () => socket.disconnect();
@@ -33,25 +35,53 @@ export default function Home() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const sendMessage = () => {
+  const handleJoin = () => {
+    if (!username || !room) return;
+    socket.emit("joinRoom", { username, room });
+    setJoined(true);
+  };
+
+  const handleSend = () => {
     if (!input.trim()) return;
     setMessages((prev) => [...prev, { text: input, sender: "me" }]);
-    socket.emit("sendMessage", input);
-    socket.emit("typing", false);
+    socket.emit("sendMessage", { room, message: input });
+    socket.emit("typing", { room, status: false });
     setInput("");
   };
 
   const handleTyping = (e) => {
     setInput(e.target.value);
-    socket.emit("typing", e.target.value.length > 0);
+    socket.emit("typing", { room, status: e.target.value.length > 0 });
   };
+
+  if (!joined) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-100">
+        <div className="bg-white rounded-xl shadow p-6 w-96 space-y-4">
+          <h2 className="text-xl font-bold text-center">Join a Chat Room</h2>
+          <Input
+            placeholder="Enter your name"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
+          <Input
+            placeholder="Enter room name"
+            value={room}
+            onChange={(e) => setRoom(e.target.value)}
+          />
+          <Button type="primary" block onClick={handleJoin}>
+            Join Room
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Layout className="h-screen">
       <Sider width={250} className="bg-white p-4 border-r">
-        <h2 className="text-xl font-bold mb-4">Chats</h2>
+        <h2 className="text-xl font-bold mb-4">Users</h2>
         <List
-          itemLayout="horizontal"
           dataSource={[{ name: "Esha" }, { name: "Michu" }]}
           renderItem={(item) => (
             <List.Item>
@@ -65,8 +95,8 @@ export default function Home() {
       </Sider>
 
       <Layout>
-        <Header className="bg-blue-600 text-white text-xl px-6 py-4">
-          Chat Room
+        <Header className="bg-blue-600 text-white px-6 py-4 text-xl">
+          Room: {room}
         </Header>
         <Content className="p-4 bg-gray-100 flex flex-col">
           <div className="flex-1 overflow-auto space-y-2">
@@ -94,14 +124,14 @@ export default function Home() {
             <Input
               value={input}
               onChange={handleTyping}
-              onPressEnter={sendMessage}
-              placeholder="Type a message..."
+              onPressEnter={handleSend}
+              placeholder="Type your message..."
               className="flex-1"
             />
             <Button
               type="primary"
               icon={<SendOutlined />}
-              onClick={sendMessage}
+              onClick={handleSend}
             >
               Send
             </Button>
@@ -111,3 +141,4 @@ export default function Home() {
     </Layout>
   );
 }
+
